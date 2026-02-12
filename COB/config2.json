@@ -1,0 +1,811 @@
+{
+  "meta": {
+    "app": {
+      "name": "Acme-Orion",
+      "system_id": "orion",
+      "env": "UAT",
+      "region": "ap-south-1",
+      "owner_team": "platform-observability",
+      "cost_center": "CC-OPS-1042",
+      "build": {
+        "version": "2.17.0-uat",
+        "git_commit": "d1a9b3c7f0aa4fd7b6e2a19d0e0f3d8a1c9b7f2e",
+        "build_date": "2026-02-02",
+        "artifact": "orion-service.jar",
+        "build_pipeline": "teamcity-uat",
+        "build_number": "UAT-2170-182",
+        "container_image": "registry.acme.example/orion/orion-service:2.17.0-uat",
+        "sbom_ref": "s3://acme-orion-uat-artifacts/sbom/orion-2.17.0-uat.spdx.json"
+      }
+    },
+    "runtime": {
+      "timezone": "Asia/Kolkata",
+      "locale": "en_IN",
+      "start_mode": "clustered",
+      "instance_limits": {
+        "min": 2,
+        "max": 8
+      },
+      "shutdown_grace_seconds": 45,
+      "feature_profile": "uat-wide",
+      "release_ring": "ring-uat",
+      "deployment": {
+        "platform": "kubernetes",
+        "namespace": "orion-uat",
+        "service_account": "orion-uat-sa",
+        "pod_annotations": {
+          "prometheus.io/scrape": "true",
+          "prometheus.io/port": "8081",
+          "sidecar.istio.io/inject": "true"
+        }
+      }
+    },
+    "contacts": {
+      "on_call": {
+        "primary": "orion-uat-oncall",
+        "secondary": "orion-platform-backup"
+      },
+      "slack": {
+        "channel": "#orion-uat-alerts",
+        "webhook_secret_ref": "secret://slack/uat/orion-alerts"
+      },
+      "email": {
+        "distribution_list": "orion-uat@acme.example"
+      }
+    }
+  },
+
+  "global": {
+    "maintenance": {
+      "enabled": false,
+      "banner": "UAT maintenance scheduled. Expect intermittent errors.",
+      "allowed_ips": ["10.10.0.0/16", "172.16.10.0/24"]
+    },
+    "id_generation": {
+      "strategy": "snowflake",
+      "node_id": 17,
+      "datacenter_id": 3
+    },
+    "time_validation": {
+      "max_clock_skew_seconds": 5,
+      "reject_if_beyond": true
+    },
+    "headers": {
+      "defaults": {
+        "X-App-Name": "Acme-Orion",
+        "X-Env": "UAT",
+        "X-Region": "ap-south-1",
+        "X-Trace-Policy": "uat-verbose"
+      },
+      "forwarded": {
+        "honor_x_forwarded_for": true,
+        "trusted_proxies": ["10.10.0.0/16", "172.16.0.0/12"]
+      }
+    },
+    "localization": {
+      "currency": "INR",
+      "date_format": "dd-MMM-yyyy",
+      "number_format": "en-IN"
+    }
+  },
+
+  "http": {
+    "server": {
+      "host": "0.0.0.0",
+      "port": 8082,
+      "admin_port": 9082,
+      "context_path": "/orion",
+      "tls": {
+        "enabled": true,
+        "protocols": ["TLSv1.2", "TLSv1.3"],
+        "keystore": {
+          "type": "PKCS12",
+          "path": "/etc/orion/uat/tls/orion-uat.p12",
+          "password_ref": "secret://tls/orion/uat/keystore_password"
+        },
+        "truststore": {
+          "type": "JKS",
+          "path": "/etc/orion/uat/tls/truststore.jks",
+          "password_ref": "secret://tls/orion/uat/truststore_password"
+        },
+        "client_auth": "optional"
+      },
+      "compression": {
+        "enabled": true,
+        "min_size_bytes": 1024,
+        "mime_types": [
+          "application/json",
+          "application/xml",
+          "text/plain",
+          "text/html",
+          "text/css",
+          "application/javascript"
+        ]
+      },
+      "limits": {
+        "max_header_size_bytes": 65536,
+        "max_request_size_bytes": 15728640,
+        "max_form_content_size_bytes": 6291456,
+        "max_connections": 10000,
+        "idle_timeout_ms": 70000,
+        "request_timeout_ms": 50000,
+        "keep_alive": {
+          "enabled": true,
+          "max_requests_per_connection": 750
+        }
+      }
+    },
+
+    "clients": {
+      "defaults": {
+        "connect_timeout_ms": 2500,
+        "read_timeout_ms": 10000,
+        "max_retries": 3,
+        "retry_backoff_ms": 300,
+        "circuit_breaker": {
+          "enabled": true,
+          "failure_threshold": 12,
+          "rolling_window_seconds": 45,
+          "open_state_seconds": 30,
+          "half_open_max_calls": 6
+        }
+      },
+      "per_service_overrides": {
+        "rca_service": {
+          "read_timeout_ms": 22000,
+          "max_retries": 2
+        },
+        "grafana": {
+          "read_timeout_ms": 8000,
+          "max_retries": 1
+        }
+      }
+    }
+  },
+
+  "security": {
+    "auth": {
+      "mode": "oidc",
+      "oidc": {
+        "issuer": "https://idp-uat.acme.example/oauth2/default",
+        "jwks_uri": "https://idp-uat.acme.example/oauth2/default/v1/keys",
+        "audience": "orion-uat",
+        "client_id": "orion-uat-web",
+        "client_secret_ref": "secret://oidc/uat/orion_web_client_secret",
+        "scopes": ["openid", "profile", "email", "groups"],
+        "claims": {
+          "subject": "sub",
+          "email": "email",
+          "groups": "groups"
+        },
+        "clock_skew_seconds": 10
+      },
+      "jwt": {
+        "algorithm": "RS256",
+        "required": true,
+        "allow_in_query_param": false,
+        "header_name": "Authorization",
+        "token_prefix": "Bearer "
+      }
+    },
+    "authorization": {
+      "rbac": {
+        "enabled": true,
+        "default_role": "viewer",
+        "roles": {
+          "viewer": {
+            "permissions": [
+              "read:dashboards",
+              "read:reports",
+              "read:configs",
+              "read:anomalies"
+            ]
+          },
+          "analyst": {
+            "permissions": [
+              "read:dashboards",
+              "read:reports",
+              "write:feedback",
+              "read:anomalies",
+              "read:rca"
+            ]
+          },
+          "admin": {
+            "permissions": ["*"],
+            "requires_mfa": true
+          }
+        },
+        "group_mappings": [
+          { "group": "orion-uat-viewers", "role": "viewer" },
+          { "group": "orion-uat-analysts", "role": "analyst" },
+          { "group": "orion-uat-admins", "role": "admin" }
+        ]
+      },
+      "ip_allowlist": {
+        "enabled": false,
+        "allowed_cidrs": ["10.10.0.0/16", "172.16.10.0/24"]
+      }
+    },
+    "secrets": {
+      "provider": "file",
+      "file_provider": {
+        "base_path": "/etc/orion/uat/secrets",
+        "file_mode": "0400"
+      },
+      "redaction": {
+        "enabled": true,
+        "patterns": [
+          "\\bAKIA[0-9A-Z]{16}\\b",
+          "\\b(?:password|passwd|pwd)\\s*=\\s*[^&\\s]+\\b",
+          "\\bBearer\\s+[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+\\b"
+        ]
+      }
+    }
+  },
+
+  "datastores": {
+    "postgres": {
+      "primary": {
+        "host": "pg-uat.acme.example",
+        "port": 5432,
+        "db": "orion_uat",
+        "schema": "public",
+        "username": "orion_uat_app",
+        "password_ref": "secret://db/uat/orion_uat_app_password",
+        "ssl": {
+          "enabled": true,
+          "mode": "verify-full",
+          "root_cert_path": "/etc/orion/uat/db/ca.pem"
+        },
+        "pool": {
+          "min": 3,
+          "max": 50,
+          "connection_timeout_ms": 3500,
+          "idle_timeout_ms": 600000,
+          "max_lifetime_ms": 1800000,
+          "validation_query": "SELECT 1"
+        },
+        "migrations": {
+          "enabled": true,
+          "tool": "flyway",
+          "locations": [
+            "classpath:db/migration/common",
+            "classpath:db/migration/uat"
+          ]
+        }
+      },
+      "read_replicas": [
+        {
+          "name": "replica-1",
+          "host": "pg-uat-ro1.acme.example",
+          "port": 5432,
+          "username": "orion_uat_ro",
+          "password_ref": "secret://db/uat/orion_uat_ro_password",
+          "pool": { "min": 1, "max": 10 }
+        }
+      ]
+    },
+
+    "redis": {
+      "cache": {
+        "mode": "sentinel",
+        "sentinel": {
+          "master_name": "orion-uat-master",
+          "nodes": [
+            "redis-s1-uat.acme.example:26379",
+            "redis-s2-uat.acme.example:26379",
+            "redis-s3-uat.acme.example:26379"
+          ]
+        },
+        "auth": {
+          "password_ref": "secret://redis/uat/password"
+        },
+        "timeouts_ms": {
+          "connect": 1500,
+          "read": 2500,
+          "write": 2500
+        },
+        "policies": {
+          "session": {
+            "ttl_seconds": 4200,
+            "max_entries": 180000,
+            "eviction": "volatile-lru"
+          },
+          "feature_flags": {
+            "ttl_seconds": 90,
+            "max_entries": 60000,
+            "eviction": "allkeys-lfu"
+          },
+          "lookup": {
+            "ttl_seconds": 1200,
+            "max_entries": 300000,
+            "eviction": "allkeys-lru"
+          },
+          "rca_context": {
+            "ttl_seconds": 600,
+            "max_entries": 120000,
+            "eviction": "allkeys-lru"
+          }
+        }
+      }
+    },
+
+    "object_store": {
+      "artifacts": {
+        "provider": "s3",
+        "bucket": "acme-orion-uat-artifacts",
+        "region": "ap-south-1",
+        "endpoint": "https://s3.ap-south-1.amazonaws.com",
+        "path_style_access": false,
+        "sse": "AES256",
+        "kms_key_id": "",
+        "uploads": {
+          "max_file_size_bytes": 73400320,
+          "allowed_mime_types": [
+            "application/json",
+            "application/xml",
+            "text/plain",
+            "application/zip",
+            "application/octet-stream"
+          ]
+        }
+      }
+    }
+  },
+
+  "messaging": {
+    "kafka": {
+      "enabled": true,
+      "bootstrap_servers": [
+        "kafka1-uat.acme.example:9093",
+        "kafka2-uat.acme.example:9093",
+        "kafka3-uat.acme.example:9093"
+      ],
+      "security": {
+        "protocol": "SASL_SSL",
+        "sasl_mechanism": "SCRAM-SHA-512",
+        "username": "orion-uat-kafka",
+        "password_ref": "secret://kafka/uat/password"
+      },
+      "topics": {
+        "audit": {
+          "name": "orion.events.audit",
+          "partitions": 6,
+          "replication_factor": 2,
+          "retention_ms": 604800000,
+          "cleanup_policy": "delete"
+        },
+        "anomaly": {
+          "name": "orion.events.anomaly",
+          "partitions": 12,
+          "replication_factor": 2,
+          "retention_ms": 1209600000,
+          "cleanup_policy": "delete"
+        },
+        "feedback": {
+          "name": "orion.events.feedback",
+          "partitions": 6,
+          "replication_factor": 2,
+          "retention_ms": 2592000000,
+          "cleanup_policy": "compact,delete"
+        },
+        "notifications": {
+          "name": "orion.events.notifications",
+          "partitions": 6,
+          "replication_factor": 2,
+          "retention_ms": 604800000,
+          "cleanup_policy": "delete"
+        }
+      },
+      "producer": {
+        "acks": "all",
+        "linger_ms": 15,
+        "batch_size_bytes": 98304,
+        "compression_type": "lz4",
+        "retries": 4,
+        "delivery_timeout_ms": 120000,
+        "max_in_flight_requests_per_connection": 5
+      },
+      "consumer": {
+        "group_id": "orion-uat-consumers",
+        "auto_offset_reset": "earliest",
+        "max_poll_records": 650,
+        "session_timeout_ms": 15000,
+        "max_partition_fetch_bytes": 1048576,
+        "concurrency": 8,
+        "dead_letter": {
+          "enabled": true,
+          "topic": "orion.events.dlq",
+          "max_attempts": 5,
+          "backoff_ms": 2000
+        }
+      }
+    },
+
+    "scheduler": {
+      "enabled": true,
+      "thread_pool_size": 8,
+      "jobs": [
+        {
+          "name": "metrics_rollup",
+          "cron": "0 */2 * * * *",
+          "enabled": true,
+          "retry": { "max_attempts": 3, "backoff_ms": 1200 },
+          "tags": ["metrics", "rollup", "prometheus"]
+        },
+        {
+          "name": "anomaly_detect",
+          "cron": "0 */1 * * * *",
+          "enabled": true,
+          "retry": { "max_attempts": 2, "backoff_ms": 1700 },
+          "tags": ["ml", "anomaly", "isolation_forest"]
+        },
+        {
+          "name": "cleanup_temp",
+          "cron": "0 0 */6 * * *",
+          "enabled": true,
+          "retry": { "max_attempts": 1, "backoff_ms": 0 },
+          "tags": ["maintenance"]
+        },
+        {
+          "name": "refresh_feature_flags",
+          "cron": "0 */1 * * * *",
+          "enabled": true,
+          "retry": { "max_attempts": 3, "backoff_ms": 500 },
+          "tags": ["feature_flags", "redis"]
+        },
+        {
+          "name": "reconcile_baselines",
+          "cron": "0 */10 * * * *",
+          "enabled": true,
+          "retry": { "max_attempts": 2, "backoff_ms": 3000 },
+          "tags": ["drift", "baseline", "git"]
+        }
+      ]
+    }
+  },
+
+  "services": {
+    "config_ingest": {
+      "base_url": "https://orion-uat.acme.example/ingest",
+      "health_path": "/health",
+      "headers": { "X-Client": "orion-core" },
+      "timeouts_ms": { "connect": 2000, "read": 12000 },
+      "retries": { "max": 2, "backoff_ms": 300 }
+    },
+    "drift_analyzer": {
+      "base_url": "https://orion-uat.acme.example/analyze",
+      "health_path": "/health",
+      "timeouts_ms": { "connect": 2000, "read": 16000 },
+      "retries": { "max": 2, "backoff_ms": 350 }
+    },
+    "rca_service": {
+      "base_url": "https://rca-uat.acme.example/api",
+      "health_path": "/actuator/health",
+      "auth": { "type": "service-token", "token_ref": "secret://svc/uat/rca_service_token" },
+      "timeouts_ms": { "connect": 2500, "read": 22000 },
+      "retries": { "max": 2, "backoff_ms": 500 }
+    },
+    "notification_gateway": {
+      "base_url": "https://notify-uat.acme.example",
+      "health_path": "/health",
+      "rate_limit": { "enabled": true, "rpm": 1500, "burst": 350 }
+    },
+    "grafana": {
+      "base_url": "https://grafana-uat.acme.example",
+      "api_path": "/api",
+      "auth": { "type": "api-key", "api_key_ref": "secret://grafana/uat/api_key" }
+    },
+    "prometheus": {
+      "base_url": "https://prometheus-uat.acme.example",
+      "paths": { "query": "/api/v1/query", "query_range": "/api/v1/query_range" },
+      "auth": { "type": "basic", "username": "orion-uat", "password_ref": "secret://prom/uat/basic_password" }
+    },
+    "loki": {
+      "base_url": "https://loki-uat.acme.example",
+      "paths": { "query": "/loki/api/v1/query", "query_range": "/loki/api/v1/query_range" },
+      "auth": { "type": "basic", "username": "orion-uat", "password_ref": "secret://loki/uat/basic_password" }
+    }
+  },
+
+  "observability": {
+    "logging": {
+      "level": "trace",
+      "format": "json",
+      "include_mdc": true,
+      "mask_secrets": true,
+      "appenders": {
+        "console": { "enabled": true },
+        "file": {
+          "enabled": true,
+          "path": "/var/log/orion/uat/orion-app.log",
+          "rolling": {
+            "max_file_size_mb": 200,
+            "max_history_days": 14,
+            "total_size_cap_gb": 4
+          }
+        }
+      },
+      "loggers": {
+        "org.hibernate.SQL": "INFO",
+        "com.acme.orion.security": "DEBUG",
+        "com.acme.orion.rca": "DEBUG",
+        "com.acme.orion.drift": "DEBUG",
+        "com.acme.orion.integrations": "DEBUG",
+        "com.acme.orion.scheduler": "DEBUG",
+        "com.acme.orion.kafka": "INFO"
+      }
+    },
+
+    "metrics": {
+      "prometheus": {
+        "enabled": true,
+        "path": "/metrics",
+        "include_jvm": true,
+        "include_http": true,
+        "include_db": true,
+        "histograms": {
+          "http_server_requests": {
+            "enabled": true,
+            "sla_buckets_ms": [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
+          }
+        },
+        "custom_metrics": [
+          { "name": "orion_drift_files_processed_total", "type": "counter", "help": "Files processed for drift" },
+          { "name": "orion_drift_findings_total", "type": "counter", "help": "Total drift findings" },
+          { "name": "orion_rca_reports_total", "type": "counter", "help": "Total RCA reports generated" },
+          { "name": "orion_feedback_events_total", "type": "counter", "help": "Feedback events captured" }
+        ]
+      }
+    },
+
+    "tracing": {
+      "enabled": true,
+      "provider": "otlp",
+      "sampling": { "strategy": "ratio", "ratio": 0.35 },
+      "otlp": {
+        "endpoint": "https://otel-collector-uat.acme.example:4317",
+        "headers": { "x-otlp-token": { "value_ref": "secret://otel/uat/token" } },
+        "tls": { "verify": true }
+      }
+    },
+
+    "alerts": {
+      "enabled": true,
+      "rules": [
+        {
+          "id": "UAT-CPU-HIGH",
+          "severity": "warning",
+          "condition": "cpu_active_pct > 80 for 5m",
+          "notify": ["slack", "email"],
+          "labels": { "env": "uat", "domain": "system" }
+        },
+        {
+          "id": "UAT-ERROR-RATE",
+          "severity": "critical",
+          "condition": "http_5xx_rate > 3 for 2m",
+          "notify": ["slack"],
+          "labels": { "env": "uat", "domain": "http" }
+        },
+        {
+          "id": "UAT-QUEUE-LAG",
+          "severity": "warning",
+          "condition": "kafka_consumer_lag > 20000 for 10m",
+          "notify": ["slack"],
+          "labels": { "env": "uat", "domain": "messaging" }
+        },
+        {
+          "id": "UAT-DB-POOL",
+          "severity": "warning",
+          "condition": "db_pool_usage_pct > 85 for 3m",
+          "notify": ["slack"],
+          "labels": { "env": "uat", "domain": "db" }
+        }
+      ]
+    }
+  },
+
+  "features": {
+    "source": "redis",
+    "refresh_seconds": 45,
+    "flags": {
+      "ui.newDashboard": true,
+      "ui.betaTheme": true,
+      "drift.semanticCompare": true,
+      "drift.ignoreWhitespace": true,
+      "drift.ignoreOrder": false,
+      "rca.useRagPipeline": true,
+      "rca.attachLogs": true,
+      "rca.attachMetrics": true,
+      "rca.maxContextTokens": 9000,
+      "feedback.capture": true,
+      "feedback.publicSharing": false,
+      "integrations.appdynamics": true,
+      "integrations.splunk": true,
+      "integrations.github": true,
+      "integrations.servicenow": false,
+      "experiments.isolationForest": true,
+      "experiments.thresholdFallback": true,
+      "experiments.semanticScores": true,
+      "experiments.llmDiffExplainer": true
+    }
+  },
+
+  "drift_policies": {
+    "baseline": {
+      "strategy": "git-branch",
+      "branch": "baseline/uat",
+      "allow_hotfix_overrides": true,
+      "override_ttl_hours": 48,
+      "baseline_cache_ttl_seconds": 300,
+      "git": {
+        "provider": "github-enterprise",
+        "repo": "acme/orion-config-baselines",
+        "ref_type": "branch",
+        "auth": { "type": "token", "token_ref": "secret://git/uat/pat" }
+      }
+    },
+    "comparison": {
+      "supported_types": {
+        "xml": {
+          "normalize": {
+            "strip_comments": true,
+            "trim_whitespace": true,
+            "collapse_runs": true,
+            "canonicalize_empty_elements": true
+          },
+          "semantic_rules": {
+            "ignore_attribute_order": true,
+            "ignore_namespace_prefixes": true,
+            "treat_missing_optional_as_default": true,
+            "ignore_node_paths": [
+              "/appConfig/meta/app/build/gitCommit",
+              "/appConfig/meta/app/build/buildDate"
+            ]
+          }
+        },
+        "json": {
+          "normalize": { "sort_keys": true, "drop_nulls": false, "coerce_numbers": true },
+          "semantic_rules": {
+            "ignore_array_order": false,
+            "ignore_paths": [
+              "$.meta.app.build.git_commit",
+              "$.meta.app.build.build_date",
+              "$.meta.runtime.deployment.pod_annotations"
+            ]
+          }
+        },
+        "yaml": {
+          "normalize": { "resolve_anchors": true, "coerce_booleans": true, "sort_keys": false },
+          "semantic_rules": {
+            "ignore_paths": ["meta.app.build.*", "meta.runtime.deployment.pod_annotations.*"]
+          }
+        }
+      },
+      "severity_matrix": {
+        "security": {
+          "critical": [
+            "security.auth.mode changed",
+            "http.server.tls.enabled changed",
+            "security.authorization.rbac.enabled=false"
+          ],
+          "high": ["security.authorization.ip_allowlist.allowed_cidrs expanded", "secrets provider changed"],
+          "medium": ["observability.logging.mask_secrets changed"]
+        },
+        "performance": {
+          "critical": ["http.server.limits.max_connections decreased > 50%", "timeouts increased > 2x"],
+          "high": ["datastores.postgres.primary.pool.max changed", "messaging.kafka.consumer.concurrency changed"],
+          "medium": ["redis.cache.policies.*.ttl_seconds changed"]
+        },
+        "functional": {
+          "critical": ["services.*.base_url changed", "features.flags.rca.useRagPipeline toggled"],
+          "high": ["messaging.kafka.topics.*.partitions changed", "scheduler.jobs[].cron changed"],
+          "medium": ["ui.branding.theme changed"]
+        }
+      }
+    },
+    "reporting": {
+      "format": "html",
+      "include_diff_snippets": true,
+      "snippet_context_lines": 5,
+      "include_risk_rationale": true,
+      "include_suggested_remediation": true,
+      "include_owner_hints": true,
+      "max_findings_per_file": 3000,
+      "html": {
+        "embed_assets": true,
+        "collapse_sections_by_default": true,
+        "highlight_levels": ["critical", "high", "medium", "low"]
+      }
+    }
+  },
+
+  "rate_limiting": {
+    "enabled": true,
+    "mode": "token-bucket",
+    "storage": "redis",
+    "global": {
+      "rpm": 8000,
+      "burst": 1500,
+      "per_ip": { "enabled": true, "rpm": 1000, "burst": 300 },
+      "per_user": { "enabled": true, "rpm": 1400, "burst": 350 }
+    },
+    "routes": {
+      "/orion/api/v1/drift/compare": { "rpm": 700, "burst": 150 },
+      "/orion/api/v1/rca/analyze": { "rpm": 300, "burst": 80 },
+      "/orion/api/v1/feedback": { "rpm": 1000, "burst": 250 },
+      "/orion/api/v1/admin/*": { "rpm": 120, "burst": 30, "requires_role": "admin" }
+    }
+  },
+
+  "ai": {
+    "provider": "external-api",
+    "model_routing": {
+      "default_model": "sonar-medium",
+      "routes": [
+        { "task": "rca.summary", "model": "sonar-medium", "max_tokens": 900, "temperature": 0.32 },
+        { "task": "rca.deep", "model": "sonar-large", "max_tokens": 1600, "temperature": 0.25 },
+        { "task": "diff.explain", "model": "sonar-medium", "max_tokens": 850, "temperature": 0.2 },
+        { "task": "remediation.plan", "model": "sonar-large", "max_tokens": 1400, "temperature": 0.35 },
+        { "task": "classify.severity", "model": "sonar-small", "max_tokens": 300, "temperature": 0.0 }
+      ]
+    },
+    "api": {
+      "base_url": "https://llm-uat.acme.example/v1",
+      "timeout_ms": 26000,
+      "api_key_ref": "secret://llm/uat/api_key",
+      "max_concurrent_requests": 10,
+      "backpressure": { "queue_size": 240, "reject_when_full": true },
+      "retry": { "max": 2, "backoff_ms": 900 }
+    },
+    "guardrails": {
+      "pii_detection": { "enabled": true, "action": "redact" },
+      "secrets_detection": { "enabled": true, "action": "block" },
+      "allowed_data_classes": ["metrics", "logs", "config", "topology"],
+      "blocked_terms": ["card_number", "cvv", "aadhar", "pan", "otp"]
+    },
+    "prompt_templates": {
+      "rca_header": "Generate a root-cause analysis for the anomaly. Be specific. Reference metrics and logs.",
+      "diff_header": "Explain configuration differences. Focus on risk, impact, and remediation.",
+      "feedback_header": "Incorporate human feedback. Improve future explanations without repeating mistakes."
+    }
+  },
+
+  "ui": {
+    "branding": {
+      "title": "Orion (UAT)",
+      "logo_path": "/static/uat/orion-logo.svg",
+      "theme": "dark-beta",
+      "accent_color": "#7C4DFF"
+    },
+    "navigation": {
+      "menu": [
+        { "key": "dashboard", "label": "Dashboards", "path": "/ui/dashboards" },
+        { "key": "drift", "label": "Config Drift", "path": "/ui/drift" },
+        { "key": "anomalies", "label": "Anomalies", "path": "/ui/anomalies" },
+        { "key": "rca", "label": "RCA Reports", "path": "/ui/rca" },
+        { "key": "feedback", "label": "Feedback", "path": "/ui/feedback" },
+        { "key": "admin", "label": "Admin", "path": "/ui/admin", "requires_role": "admin" }
+      ]
+    },
+    "tables": {
+      "page_size_default": 25,
+      "page_size_options": [10, 25, 50, 100, 200],
+      "export": { "csv": true, "json": true, "xlsx": false }
+    },
+    "session": {
+      "cookie_name": "ORION_UAT_SID",
+      "timeout_minutes": 90,
+      "sliding": true,
+      "same_site": "Lax",
+      "secure": true
+    },
+    "ux": {
+      "collapse_advanced_by_default": true,
+      "show_beta_badges": true,
+      "enable_live_refresh": true,
+      "live_refresh_seconds": 20,
+      "toast_duration_ms": 4500
+    }
+  }
+}

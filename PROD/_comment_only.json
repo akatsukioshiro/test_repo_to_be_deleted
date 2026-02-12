@@ -1,0 +1,5 @@
+﻿{
+  // env2 different comment
+  "a": 1,
+  "b": { "c": 2 }
+}

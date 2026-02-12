@@ -1,0 +1,568 @@
+# ==========================================================================================
+# Application Configuration (PROD)
+# File: app-config-prod.yaml
+# Notes:
+#   - YAML differs from UAT YAML (different grouping, new anchors, overlays)
+#   - PROD characteristics: stricter security, tighter limits, stable cadences, fewer experiments
+#   - Major & subtle diffs vs UAT YAML already created
+# ==========================================================================================
+
+# -----------------------------
+# PROD anchors (different from UAT)
+# -----------------------------
+x_anchors:
+  prod_headers: &prod_headers
+    X-App-Name: "Acme-Orion"
+    X-Env: "PROD"
+    X-Region: "ap-south-1"
+    X-Trace-Policy: "prod-standard"
+
+  prod_timeouts: &prod_timeouts
+    connect_ms: 2000
+    read_ms: 8000
+    write_ms: 8000
+    idle_ms: 60000
+
+  prod_retry: &prod_retry
+    max_attempts: 1
+    backoff_ms: 250
+    jitter_ms: 60
+    retry_on: [ "5xx", "timeout" ]
+
+  prod_tls: &prod_tls
+    enabled: true
+    protocols: [ "TLSv1.2", "TLSv1.3" ]
+    client_auth: "required"
+    keystore:
+      type: "PKCS12"
+      path: "/etc/orion/prod/tls/orion-prod.p12"
+      password_ref: "secret://tls/orion/prod/keystore_password"
+    truststore:
+      type: "JKS"
+      path: "/etc/orion/prod/tls/truststore.jks"
+      password_ref: "secret://tls/orion/prod/truststore_password"
+    verify_peer: true
+
+  cb_prod: &cb_prod
+    enabled: true
+    failure_threshold: 8
+    rolling_window_seconds: 30
+    open_state_seconds: 40
+    half_open_max_calls: 4
+
+  pool_prod: &pool_prod
+    min: 10
+    max: 120
+    connection_timeout_ms: 2500
+    idle_timeout_ms: 600000
+    max_lifetime_ms: 1800000
+    validation_query: "SELECT 1"
+
+  redaction_patterns: &redaction_patterns
+    - "\\bAKIA[0-9A-Z]{16}\\b"
+    - "\\b(?:password|passwd|pwd)\\s*=\\s*[^&\\s]+\\b"
+    - "\\bBearer\\s+[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+\\b"
+
+# -----------------------------
+# Identity
+# -----------------------------
+meta:
+  app:
+    name: "Acme-Orion"
+    system_id: "orion"
+    env: "prod"
+    region: "ap-south-1"
+    owner_team: "platform-observability"
+    cost_center: "CC-OPS-1042"
+  build:
+    version: "2.17.0"
+    commit: "0b2f71e2f81c4fd0b0c7d9f12a3b4c5d6e7f8a90"
+    build_date: "2026-02-02"
+    pipeline: "teamcity-prod"
+    image: "registry.acme.example/orion/orion-service:2.17.0"
+    sbom_ref: "s3://acme-orion-prod-artifacts/sbom/orion-2.17.0.spdx.json"
+  contacts:
+    on_call_primary: "orion-prod-oncall"
+    on_call_secondary: "orion-platform-backup"
+    slack_channel: "#orion-prod-alerts"
+    slack_webhook_secret_ref: "secret://slack/prod/orion-alerts"
+    email_dl: "orion-prod@acme.example"
+
+runtime:
+  timezone: "Asia/Kolkata"
+  locale: "en_IN"
+  scaling:
+    min_instances: 6
+    max_instances: 28
+  shutdown_grace_seconds: 60
+  clock_skew:
+    max_seconds: 3
+    reject_if_beyond: true
+  deployment:
+    platform: "kubernetes"
+    namespace: "orion"
+    service_account: "orion-prod-sa"
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8080"
+      sidecar.istio.io/inject: "true"
+      acme.io/release-ring: "ring-prod"
+
+# -----------------------------
+# Edge / HTTP
+# -----------------------------
+edge:
+  http:
+    bind: "0.0.0.0"
+    port: 8080
+    admin_port: 9080
+    base_path: "/orion"
+    tls: *prod_tls
+    headers: *prod_headers
+    compression:
+      enabled: true
+      min_size_bytes: 4096
+      mime_types: [ "application/json", "application/xml", "text/plain" ]
+    limits:
+      max_header_bytes: 32768
+      max_request_bytes: 8388608
+      max_form_bytes: 4194304
+      max_connections: 20000
+      keep_alive:
+        enabled: true
+        max_requests_per_connection: 1000
+      timeouts_ms:
+        request: 40000
+        idle: 60000
+
+outbound:
+  defaults:
+    timeouts: *prod_timeouts
+    retry: *prod_retry
+    circuit_breaker: *cb_prod
+    connection_pool:
+      max_total: 900
+      max_per_host: 180
+      idle_eviction_ms: 240000
+
+# -----------------------------
+# Security
+# -----------------------------
+sec:
+  auth:
+    mode: "oidc"
+    oidc:
+      issuer: "https://idp.acme.example/oauth2/default"
+      jwks_uri: "https://idp.acme.example/oauth2/default/v1/keys"
+      audience: "orion"
+      client_id: "orion-prod-web"
+      client_secret_ref: "secret://oidc/prod/orion_web_client_secret"
+      scopes: [ "openid", "profile", "email", "groups" ]
+      claims:
+        subject: "sub"
+        email: "email"
+        groups: "groups"
+      clock_skew_seconds: 5
+    jwt:
+      required: true
+      header: "Authorization"
+      prefix: "Bearer "
+      algorithm: "RS256"
+      allow_query_param: false
+
+  rbac:
+    enabled: true
+    default_role: "viewer"
+    roles:
+      viewer:
+        permissions: [ "read:dashboards", "read:reports", "read:configs" ]
+      analyst:
+        permissions: [ "read:dashboards", "read:reports", "read:anomalies", "read:rca", "write:feedback" ]
+      admin:
+        permissions: [ "*" ]
+        requires_mfa: true
+    groups:
+      - { group: "orion-prod-viewers", role: "viewer" }
+      - { group: "orion-prod-analysts", role: "analyst" }
+      - { group: "orion-prod-admins", role: "admin" }
+
+  ip_allowlist:
+    enabled: true
+    cidrs: [ "10.20.0.0/16", "172.20.0.0/16" ]
+
+  secrets:
+    provider: "file"
+    file:
+      base_path: "/etc/orion/prod/secrets"
+      mode: "0400"
+    redaction:
+      enabled: true
+      patterns: *redaction_patterns
+
+# -----------------------------
+# Storage
+# -----------------------------
+data:
+  postgres:
+    host: "pg-prod.acme.example"
+    port: 5432
+    database: "orion"
+    schema: "public"
+    credentials:
+      username: "orion_app"
+      password_ref: "secret://db/prod/orion_app_password"
+    ssl:
+      enabled: true
+      mode: "verify-full"
+      root_cert_path: "/etc/orion/prod/db/ca.pem"
+    pool: *pool_prod
+    replicas:
+      - name: "ro1"
+        host: "pg-prod-ro1.acme.example"
+        port: 5432
+        credentials:
+          username: "orion_ro"
+          password_ref: "secret://db/prod/orion_ro_password"
+        pool: { min: 3, max: 30 }
+      - name: "ro2"
+        host: "pg-prod-ro2.acme.example"
+        port: 5432
+        credentials:
+          username: "orion_ro"
+          password_ref: "secret://db/prod/orion_ro_password"
+        pool: { min: 3, max: 30 }
+    migrations:
+      enabled: false
+
+  redis:
+    mode: "cluster"
+    nodes:
+      - "redis-c1-prod.acme.example:6379"
+      - "redis-c2-prod.acme.example:6379"
+      - "redis-c3-prod.acme.example:6379"
+      - "redis-c4-prod.acme.example:6379"
+    auth:
+      password_ref: "secret://redis/prod/password"
+    timeouts_ms:
+      connect: 1200
+      read: 1800
+      write: 1800
+    caches:
+      session: { ttl_seconds: 3600, max_entries: 400000, eviction: "volatile-lru" }
+      feature_flags: { ttl_seconds: 60, max_entries: 100000, eviction: "allkeys-lfu" }
+      lookup: { ttl_seconds: 600, max_entries: 800000, eviction: "allkeys-lru" }
+      rca_context: { ttl_seconds: 420, max_entries: 250000, eviction: "allkeys-lru" }
+
+  object_store:
+    provider: "s3"
+    bucket: "acme-orion-prod-artifacts"
+    region: "ap-south-1"
+    endpoint: "https://s3.ap-south-1.amazonaws.com"
+    encryption:
+      sse: "AES256"
+      kms_key_arn: "arn:aws:kms:ap-south-1:123456789012:key/abcd-ef01-2345-6789-abcd"
+    uploads:
+      max_size_bytes: 26214400
+      allowed_mime_types: [ "application/json", "application/xml", "application/zip" ]
+    lifecycle:
+      rules:
+        - { id: "logs-archive", prefix: "logs/", transition_days: 14, storage_class: "STANDARD_IA" }
+        - { id: "reports-archive", prefix: "reports/", transition_days: 30, storage_class: "GLACIER" }
+
+# -----------------------------
+# Messaging & scheduling
+# -----------------------------
+work:
+  kafka:
+    enabled: true
+    bootstrap_servers:
+      - "kafka1-prod.acme.example:9093"
+      - "kafka2-prod.acme.example:9093"
+      - "kafka3-prod.acme.example:9093"
+    security:
+      protocol: "SASL_SSL"
+      sasl_mechanism: "SCRAM-SHA-512"
+      username: "orion-prod-kafka"
+      password_ref: "secret://kafka/prod/password"
+    topics:
+      audit: { name: "orion.events.audit", partitions: 12, rf: 3, retention_ms: 1209600000, cleanup: "delete" }
+      anomaly: { name: "orion.events.anomaly", partitions: 24, rf: 3, retention_ms: 1209600000, cleanup: "delete" }
+      feedback: { name: "orion.events.feedback", partitions: 12, rf: 3, retention_ms: 5184000000, cleanup: "compact,delete" }
+      notifications: { name: "orion.events.notifications", partitions: 12, rf: 3, retention_ms: 1209600000, cleanup: "delete" }
+      dlq: { name: "orion.events.dlq", partitions: 6, rf: 3, retention_ms: 1209600000, cleanup: "delete" }
+    producer:
+      acks: "all"
+      linger_ms: 5
+      batch_size_bytes: 131072
+      compression: "lz4"
+      retries: 2
+      delivery_timeout_ms: 120000
+      max_in_flight: 5
+    consumer:
+      group_id: "orion-prod-consumers"
+      auto_offset_reset: "latest"
+      max_poll_records: 800
+      session_timeout_ms: 15000
+      fetch_max_bytes: 2097152
+      concurrency: 14
+      dead_letter:
+        enabled: true
+        topic: "orion.events.dlq"
+        max_attempts: 4
+        backoff_ms: 2500
+
+  scheduler:
+    enabled: true
+    thread_pool_size: 10
+    jobs:
+      - { name: "metrics_rollup", cron: "0 */5 * * * *", enabled: true, retry: { max_attempts: 2, backoff_ms: 1500 } }
+      - { name: "anomaly_detect", cron: "0 */2 * * * *", enabled: true, retry: { max_attempts: 2, backoff_ms: 2000 } }
+      - { name: "cleanup_temp", cron: "0 0 */12 * * *", enabled: true, retry: { max_attempts: 1, backoff_ms: 0 } }
+      - { name: "refresh_feature_flags", cron: "0 */1 * * * *", enabled: true, retry: { max_attempts: 3, backoff_ms: 500 } }
+      - { name: "reconcile_baselines", cron: "0 */20 * * * *", enabled: true, retry: { max_attempts: 2, backoff_ms: 3500 } }
+
+# -----------------------------
+# Integrations (PROD endpoints)
+# -----------------------------
+services:
+  core:
+    config_ingest:
+      url: "https://orion.acme.example/ingest"
+      health: "/health"
+      headers: *prod_headers
+      timeouts: { connect_ms: 1500, read_ms: 9000, write_ms: 9000 }
+    drift_analyzer:
+      url: "https://orion.acme.example/analyze"
+      health: "/health"
+      headers: *prod_headers
+      timeouts: { connect_ms: 1500, read_ms: 12000, write_ms: 12000 }
+    rca:
+      url: "https://rca.acme.example/api"
+      health: "/actuator/health"
+      auth: { type: "service-token", token_ref: "secret://svc/prod/rca_service_token" }
+      headers: *prod_headers
+      timeouts: { connect_ms: 2000, read_ms: 16000, write_ms: 16000 }
+    notify:
+      url: "https://notify.acme.example"
+      health: "/health"
+      headers: *prod_headers
+      rate_limit: { enabled: true, rpm: 900, burst: 150 }
+
+  observability:
+    grafana:
+      url: "https://grafana.acme.example"
+      api_path: "/api"
+      auth: { type: "api-key", api_key_ref: "secret://grafana/prod/api_key" }
+    prometheus:
+      url: "https://prometheus.acme.example"
+      paths: { query: "/api/v1/query", query_range: "/api/v1/query_range" }
+      auth: { type: "basic", username: "orion", password_ref: "secret://prom/prod/basic_password" }
+    loki:
+      url: "https://loki.acme.example"
+      paths: { query: "/loki/api/v1/query", query_range: "/loki/api/v1/query_range" }
+      auth: { type: "basic", username: "orion", password_ref: "secret://loki/prod/basic_password" }
+
+  external:
+    appdynamics:
+      enabled: true
+      controller: "https://appd.acme.example/controller"
+      account: "acme"
+      app_name: "Orion"
+      tier_name: "orion-service"
+      access_key_ref: "secret://appd/prod/access_key"
+    splunk:
+      enabled: true
+      hec_url: "https://splunk-hec.acme.example:8088/services/collector"
+      token_ref: "secret://splunk/prod/hec_token"
+      index: "orion_prod"
+      sourcetype: "orion:json"
+      batch: { max_events: 2500, flush_interval_ms: 2000 }
+    github:
+      enabled: true
+      api_url: "https://github.acme.example/api/v3"
+      auth:
+        type: "app"
+        app_id: "22119"
+        private_key_ref: "secret://git/prod/app_private_key"
+      baseline_repo:
+        org: "acme"
+        repo: "orion-config-baselines"
+        ref_type: "tag"
+        tag_prefix: "baseline/prod"
+        require_signed_tag: true
+    servicenow:
+      enabled: true
+      instance_url: "https://acme.service-now.com"
+      client_id: "orion-prod-sn"
+      client_secret_ref: "secret://sn/prod/client_secret"
+      cmdb:
+        service_table: "cmdb_ci_service"
+        service_name: "Orion"
+
+# -----------------------------
+# Observability (PROD)
+# -----------------------------
+obs:
+  logging:
+    level: "INFO"
+    format: "json"
+    include_mdc: true
+    mask_secrets: true
+    sinks:
+      console: { enabled: true }
+      file:
+        enabled: true
+        path: "/var/log/orion/prod/orion-app.log"
+        rolling: { max_file_size_mb: 200, max_history_days: 30, total_size_cap_gb: 10 }
+    overrides:
+      org.hibernate.SQL: "WARN"
+      com.acme.orion.security: "INFO"
+      com.acme.orion.rca: "INFO"
+      com.acme.orion.drift: "INFO"
+      com.acme.orion.integrations: "INFO"
+      com.acme.orion.scheduler: "INFO"
+      com.acme.orion.kafka: "INFO"
+
+  metrics:
+    prometheus:
+      enabled: true
+      path: "/metrics"
+      histograms:
+        http_server_requests:
+          enabled: true
+          sla_buckets_ms: [ 50, 100, 250, 500, 1000, 2500 ]
+
+  tracing:
+    enabled: true
+    provider: "otlp"
+    sampling: { strategy: "ratio", ratio: 0.10 }
+    otlp:
+      endpoint: "https://otel-collector.acme.example:4317"
+      headers:
+        x-otlp-token: { value_ref: "secret://otel/prod/token" }
+      tls: { verify: true }
+
+  alerting:
+    enabled: true
+    rules:
+      - { id: "PROD-CPU-HIGH", severity: "warning", condition: "cpu_active_pct > 75 for 10m", notify: [ "slack", "email" ] }
+      - { id: "PROD-ERROR-RATE", severity: "critical", condition: "http_5xx_rate > 2 for 3m", notify: [ "slack" ] }
+      - { id: "PROD-QUEUE-LAG", severity: "critical", condition: "kafka_consumer_lag > 50000 for 10m", notify: [ "slack" ] }
+
+# -----------------------------
+# PROD feature flags (NO beta)
+# -----------------------------
+flags:
+  store: "redis"
+  refresh_seconds: 30
+  values:
+    ui.newDashboard: true
+    ui.betaTheme: false
+    ui.experimentalCards: false
+    drift.semanticCompare: true
+    drift.ignoreWhitespace: true
+    drift.ignoreOrder: true
+    drift.strictSchema: true
+    rca.useRagPipeline: true
+    rca.attachLogs: true
+    rca.attachMetrics: true
+    rca.maxContextTokens: 6000
+    feedback.capture: true
+    feedback.publicSharing: false
+    integrations.appdynamics: true
+    integrations.splunk: true
+    integrations.github: true
+    integrations.servicenow: true
+    experiments.isolationForest: false
+    experiments.thresholdFallback: true
+    experiments.semanticScores: true
+    experiments.llmDiffExplainer: true
+    experiments.autoRemediation: false
+
+# -----------------------------
+# PROD drift policies (separate block)
+# -----------------------------
+drift_policy:
+  baseline:
+    mode: "git-signed-tag"
+    tag_prefix: "baseline/prod"
+    allow_hotfix_overrides: false
+    require_signature: true
+    cache_ttl_seconds: 180
+  compare:
+    xml:
+      normalize: { strip_comments: true, trim_whitespace: true, collapse_runs: true, canonicalize_empty_elements: true }
+      semantic:
+        ignore_attribute_order: true
+        ignore_namespace_prefixes: true
+        treat_missing_optional_as_default: true
+        ignore_paths:
+          - "/appConfig/meta/app/build/gitCommit"
+          - "/appConfig/meta/app/build/buildDate"
+    json:
+      normalize: { sort_keys: true, drop_nulls: true, coerce_numbers: true }
+      semantic:
+        ignore_array_order: false
+        ignore_paths:
+          - "$.about.build.git.commit"
+          - "$.about.build.git.build_date"
+    yaml:
+      normalize: { resolve_anchors: true, coerce_booleans: true, sort_keys: false }
+      semantic:
+        ignore_paths:
+          - "meta.build.*"
+          - "runtime.deployment.annotations.*"
+  reporting:
+    format: "html"
+    include_snippets: true
+    snippet_context_lines: 4
+    include_risk: true
+    include_remediation: true
+    include_owner_hints: true
+    max_findings: 2000
+
+# -----------------------------
+# Rate limits (PROD)
+# -----------------------------
+limits:
+  rate:
+    enabled: true
+    mode: "token-bucket"
+    global: { rpm: 3500, burst: 700 }
+    per_ip: { enabled: true, rpm: 240, burst: 60 }
+    per_user: { enabled: true, rpm: 420, burst: 100 }
+    routes:
+      "/orion/api/v1/drift/compare": { rpm: 180, burst: 40 }
+      "/orion/api/v1/rca/analyze": { rpm: 120, burst: 25 }
+      "/orion/api/v1/feedback": { rpm: 300, burst: 60 }
+      "/orion/api/v1/admin/*": { rpm: 60, burst: 15, requires_role: "admin" }
+  payloads:
+    max_config_file_bytes: 8388608
+    max_total_upload_bytes: 26214400
+    max_feedback_bytes: 65536
+    max_log_snippet_bytes: 262144
+
+# -----------------------------
+# AI settings (PROD)
+# -----------------------------
+ai:
+  provider: "external-api"
+  api:
+    base_url: "https://llm.acme.example/v1"
+    timeout_ms: 22000
+    api_key_ref: "secret://llm/prod/api_key"
+    max_concurrency: 12
+    backpressure: { queue_size: 300, reject_when_full: true }
+    retry: { max_attempts: 2, backoff_ms: 900 }
+  models:
+    default: "sonar-medium"
+    routes:
+      rca_summary: { model: "sonar-medium", max_tokens: 800, temperature: 0.25 }
+      rca_deep: { model: "sonar-large", max_tokens: 1200, temperature: 0.2 }
+      diff_explain: { model: "sonar-medium", max_tokens: 700, temperature: 0.15 }
+      remediation_plan: { model: "sonar-large", max_tokens: 1000, temperature: 0.3 }
+  guardrails:
+    pii: { enabled: true, action: "redact" }
+    secrets: { enabled: true, action: "block" }
+    allowed_data_classes: [ "metrics", "logs", "config", "topology" ]
+    blocked_terms: [ "card_number", "cvv", "aadhar", "pan", "otp" ]
