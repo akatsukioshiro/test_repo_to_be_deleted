@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <connectionConfig version="1.1">
-  <connection id="primary">
+    <test>val</test>
+    <connection id="primary">
     <type>amqp</type>
     <host>mq-prod.internal</host>
     <port>5671</port>
@@ -46,4 +47,6 @@
     <created>2025-12-01</created>
     <approvalTicket>CHG-8821</approvalTicket>
   </metadata>
+  <test>val2</test>
+  <test2>val2</test2>    
 </connectionConfig>
