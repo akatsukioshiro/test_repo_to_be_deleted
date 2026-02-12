@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<env id="COB" schema="v1">
+  <meta>
+    <region>ap-south-1</region>
+    <owner>ops-cob</owner>
+    <created>2025-11-12</created>
+  </meta>
+  <network>
+    <cidr>10.40.0.0/16</cidr>
+    <dns enabled="true"/>
+    <nat mode="off"/>
+    <subnets>
+      <public id="subnet-cob-pub-01" az="a"/>
+      <private id="subnet-cob-priv-01" az="a"/>
+    </subnets>
+  </network>
+  <service name="drift-api">
+    <http port="8080" basePath="/cob"/>
+    <timeouts>
+      <connectMs>5000</connectMs>
+      <readMs>30000</readMs>
+    </timeouts>
+    <limits>
+      <rate rps="20"/>
+      <payload maxKb="5120"/>
+    </limits>
+  </service>
+  <database engine="postgres">
+    <endpoint host="cob-db.internal" port="5432"/>
+    <pool min="2" max="5"/>
+    <backup retentionDays="30"/>
+  </database>
+  <security>
+    <tls min="1.2"/>
+    <waf enabled="false"/>
+    <allow>
+      <cidr>10.0.0.0/8</cidr>
+      <cidr>172.16.0.0/12</cidr>
+    </allow>
+    <auth mode="basic">
+      <tokenTtl minutes="30"/>
+    </auth>
+  </security>
+  <observability>
+    <logs level="INFO"/>
+    <metrics scrapeSeconds="30"/>
+    <tracing enabled="false"/>
+  </observability>
+</env>

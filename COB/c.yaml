@@ -1,0 +1,42 @@
+env: COB
+region: ap-south-1
+service:
+  name: drift-api
+  http:
+    port: 8080
+    basePath: /cob
+  timeouts_ms:
+    connect: 5000
+    read: 30000
+  limits:
+    rate_rps: 20
+    max_payload:
+      unit: kb
+      value: 5120
+database:
+  engine: postgres
+  endpoint:
+    host: cob-db.internal
+    port: "5432"
+  pool: { min: 2, max: 5 }
+  backup:
+    retention_days: 30
+security:
+  tls_min: "1.2"
+  waf: false
+  allowed_cidrs:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+  auth:
+    mode: basic
+    token_ttl: 30m
+observability:
+  logs:
+    level: INFO
+  metrics:
+    scrape_seconds: 30
+  tracing:
+    enabled: false
+notes:
+  nat: off
+  dns: true
