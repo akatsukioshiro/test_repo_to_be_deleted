@@ -1,49 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<env id="COB" schema="v1">
+<environment name="PROD" schema="v2">
   <meta>
-    <region>ap-south-1</region>
-    <owner>ops-cob</owner>
-    <created>2025-11-12</created>
+    <region>eu-west-1</region>
+    <owner>ops-prod</owner>
+    <created>2024-06-01</created>
+    <changeWindow>sun-02:00-04:00</changeWindow>
   </meta>
   <network>
-    <cidr>10.40.0.0/16</cidr>
-    <dns enabled="true"/>
-    <nat mode="off"/>
+    <cidr>10.10.0.0/16</cidr>
+    <dns enabled="1"/>
+    <nat mode="enabled"/>
     <subnets>
-      <public id="subnet-cob-pub-01" az="a"/>
-      <private id="subnet-cob-priv-01" az="a"/>
+      <public>
+        <item id="subnet-prod-pub-a" az="a"/>
+        <item id="subnet-prod-pub-b" az="b"/>
+      </public>
+      <private>
+        <item id="subnet-prod-priv-a" az="a"/>
+        <item id="subnet-prod-priv-b" az="b"/>
+      </private>
     </subnets>
+    <egress>
+      <allowedPorts>443,53</allowedPorts>
+    </egress>
   </network>
   <service name="drift-api">
-    <http port="8080" basePath="/cob"/>
+    <https port="8443" basePath="/"/>
     <timeouts>
-      <connectMs>5000</connectMs>
-      <readMs>30000</readMs>
+      <connectMs>3s</connectMs>
+      <readMs>0.5m</readMs>
+      <retry>
+        <maxAttempts>3</maxAttempts>
+        <backoffMs>250</backoffMs>
+      </retry>
     </timeouts>
     <limits>
-      <rate rps="20"/>
-      <payload maxKb="5120"/>
+      <rate rps="200"/>
+      <payload maxMb="20"/>
     </limits>
   </service>
-  <database engine="postgres">
-    <endpoint host="cob-db.internal" port="5432"/>
-    <pool min="2" max="5"/>
-    <backup retentionDays="30"/>
+  <database engine="aurora-postgresql">
+    <endpoint host="prod-db.cluster.internal" port="5432"/>
+    <pool min="10" max="80"/>
+    <backup retentionDays="7" pitr="true"/>
   </database>
   <security>
-    <tls min="1.2"/>
-    <waf enabled="false"/>
-    <allow>
-      <cidr>10.0.0.0/8</cidr>
-      <cidr>172.16.0.0/12</cidr>
-    </allow>
-    <auth mode="basic">
-      <tokenTtl minutes="30"/>
+    <tls min="1.3"/>
+    <waf enabled="true"/>
+    <auth mode="oidc">
+      <issuer>prod-idp</issuer>
+      <tokenTtl seconds="600"/>
     </auth>
   </security>
-  <observability>
-    <logs level="INFO"/>
-    <metrics scrapeSeconds="30"/>
-    <tracing enabled="false"/>
-  </observability>
-</env>
+  <!-- whole block removed: observability/logs moved to sidecar in PROD -->
+</environment>
