@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<connectionConfig version="1.1">
+  <connection id="primary">
+    <type>amqp</type>
+    <host>mq-prod.internal</host>
+    <port>5671</port>
+    <credentials>
+      <username>prod_user</username>
+      <password encrypted="true">ENC99999</password>
+      <rotation enabled="true" intervalDays="30"/>
+    </credentials>
+    <timeouts>
+      <connectMs>3000</connectMs>
+      <readMs>8000</readMs>
+    </timeouts>
+    <heartbeat intervalSeconds="15"/>
+  </connection>
+
+  <routing>
+    <exchange name="events.exchange" type="topic"/>
+    <queues>
+      <queue name="events.prod.queue" durable="true"/>
+      <queue name="audit.prod.queue" durable="true"/>
+      <queue name="deadletter.prod.queue" durable="true"/>
+    </queues>
+  </routing>
+
+  <retryPolicy>
+    <maxAttempts>3</maxAttempts>
+    <backoffMs>250</backoffMs>
+    <jitter enabled="true"/>
+  </retryPolicy>
+
+  <compression enabled="true"/>
+
+  <monitoring>
+    <metrics enabled="true"/>
+    <logLevel>WARN</logLevel>
+    <alerts>
+      <email>ops@company.com</email>
+    </alerts>
+  </monitoring>
+
+  <metadata>
+    <owner>integration-team</owner>
+    <created>2025-12-01</created>
+    <approvalTicket>CHG-8821</approvalTicket>
+  </metadata>
+</connectionConfig>
