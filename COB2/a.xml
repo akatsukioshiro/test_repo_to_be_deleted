@@ -1,25 +1,45 @@
-<operatingSystemRoot id="linux01" family="unix">
-  <kernelCore type="monolithic" version="5.15">
-    <moduleExt4>
-      <ext4Status>enabled</ext4Status>
-    </moduleExt4>
-    <moduleNetfilter>
-      <netfilterState>enabled</netfilterState>
-    </moduleNetfilter>
-  </kernelCore>
-  <serviceSSH>
-    <sshPort>22</sshPort>
-    <sshPolicy>allow</sshPolicy>
-  </serviceSSH>
-  <serviceCron>
-    <cronMode>enabled</cronMode>
-  </serviceCron>
-  <securityPolicy>
-    <selinuxMode>enforcing</selinuxMode>
-  </securityPolicy>
-  <resourceLimits>
-    <maxOpenFiles>
-      <softLimit>1024</softLimit>
-    </maxOpenFiles>
-  </resourceLimits>
-</operatingSystemRoot>
+<?xml version="1.0" encoding="UTF-8"?>
+<connectionConfig version="1.1">
+  <test>val</test>
+  <test>val2</test>
+  <test2>val</test2>
+  <connection id="primary">
+    <type>amqp</type>
+    <host>mq-cob.internal</host>
+    <port>5672</port>
+    <credentials>
+      <username>cob_user</username>
+      <password encrypted="true">ENC12345</password>
+    </credentials>
+    <timeouts>
+      <connectMs>3000</connectMs>
+      <readMs>10000</readMs>
+    </timeouts>
+    <heartbeat intervalSeconds="30"/>
+  </connection>
+
+  <routing>
+    <exchange name="events.exchange" type="topic"/>
+    <queues>
+      <queue name="events.cob.queue" durable="true"/>
+      <queue name="audit.cob.queue" durable="false"/>
+    </queues>
+  </routing>
+
+  <retryPolicy>
+    <maxAttempts>5</maxAttempts>
+    <backoffMs>500</backoffMs>
+  </retryPolicy>
+
+  <compression enabled="false"/>
+
+  <monitoring>
+    <metrics enabled="true"/>
+    <logLevel>INFO</logLevel>
+  </monitoring>
+
+  <metadata>
+    <owner>integration-team</owner>
+    <created>2025-12-01</created>
+  </metadata>
+</connectionConfig>
