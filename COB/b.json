@@ -23,5 +23,15 @@
     "log_level": "info",
     "metrics": { "scrape_seconds": 30 },
     "tracing": { "enabled": false }
-  }
+  },
+  "lst": [
+    "a",
+    "b",
+    "c"
+  ],
+  "lst3": [
+    "c",
+    "d"
+  ]
 }
+
