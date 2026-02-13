@@ -1,16 +1,26 @@
 {
-  "os": "Linux",
-  "kernel": {
-    "type": "monolithic",
-    "version": "5.15",
-    "modules": [
-      {"name": "ext4", "enabled": true},
-      {"name": "nf_conntrack", "enabled": true}
-    ]
+  "osIdentity": {
+    "osLabel": "Linux",
+    "osFamily": "unix",
+    "osBuildId": "linux01"
   },
-  "services": [
-    {"name": "ssh", "port": 22},
-    {"name": "cron"}
-  ],
-  "security": {"selinux": "enforcing"}
+  "kernelCore": {
+    "kernelType": "monolithic",
+    "kernelVersion": "5.15",
+    "kernelFeatures": {
+      "featureExt4": "on",
+      "featureNetfilter": "on"
+    }
+  },
+  "serviceControl": {
+    "daemonSsh": { "sshPort": 22, "sshPolicy": "allow" },
+    "daemonCron": { "cronMode": "enabled" }
+  },
+  "securityModel": {
+    "selinuxState": "enforcing",
+    "firewallProfile": { "fwDefaultZone": "public" }
+  },
+  "resourcePolicy": {
+    "limitOpenFiles": { "nofileSoft": 1024 }
+  }
 }

@@ -1,15 +1,12 @@
-<operatingSystem id="linux01" family="unix" vendor="community">
-  <kernel type="monolithic" version="6.6">
-    <modules>
-      <module name="ext4" enabled="true"/>
-      <module name="btrfs" enabled="true"/>
-    </modules>
-  </kernel>
-  <services>
-    <service name="ssh" port="2222"/>
-  </services>
-  <security selinux="permissive"/>
-  <observability>
-    <agent name="node_exporter"/>
-  </observability>
-</operatingSystem>
+<operatingSystemRoot id="linux01" family="unix" vendor="community">
+  <kernelCore type="monolithic" version="6.6">
+    <moduleExt4 enabled="true"/>
+    <moduleBtrfs enabled="true"/>
+  </kernelCore>
+  <serviceSSH port="2222"/>
+  <securityPolicy selinuxMode="permissive"/>
+  <observabilityAgent name="node_exporter"/>
+  <resourceLimits>
+    <maxOpenFiles value="4096"/>
+  </resourceLimits>
+</operatingSystemRoot>

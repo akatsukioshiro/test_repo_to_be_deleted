@@ -1,18 +1,29 @@
 {
-  "os": "Linux",
-  "kernel": {
-    "type": "monolithic",
-    "version": "6.6",
-    "modules": [
-      {"name": "ext4", "enabled": true},
-      {"name": "btrfs", "enabled": true}
-    ]
+  "osIdentity": {
+    "osLabel": "GNU/Linux",
+    "osFamily": "unix",
+    "osBuildId": "linux01",
+    "osVendor": "community"
   },
-  "services": [
-    {"name": "ssh", "port": 2222}
-  ],
-  "security": {"selinux": "permissive"},
-  "observability": {
-    "agents": ["node_exporter"]
+  "kernelCore": {
+    "kernelType": "monolithic",
+    "kernelVersion": "6.6",
+    "kernelFeatures": {
+      "featureExt4": "on",
+      "featureBtrfs": "on"
+    }
+  },
+  "serviceControl": {
+    "daemonSsh": { "sshPort": 2222, "sshPolicy": "allow" }
+  },
+  "securityModel": {
+    "selinuxState": "permissive",
+    "firewallProfile": { "fwDefaultZone": "trusted" }
+  },
+  "observabilityPack": {
+    "metricsAgent": { "agentId": "node_exporter", "agentMode": "active" }
+  },
+  "resourcePolicy": {
+    "limitOpenFiles": { "nofileSoft": 4096 }
   }
 }

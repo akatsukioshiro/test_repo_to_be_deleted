@@ -1,13 +1,12 @@
-<operatingSystem id="linux01" family="unix">
-  <kernel type="monolithic" version="5.15">
-    <modules>
-      <module name="ext4" enabled="true"/>
-      <module name="nf_conntrack" enabled="true"/>
-    </modules>
-  </kernel>
-  <services>
-    <service name="ssh" port="22"/>
-    <service name="cron"/>
-  </services>
-  <security selinux="enforcing"/>
-</operatingSystem>
+<operatingSystemRoot id="linux01" family="unix">
+  <kernelCore type="monolithic" version="5.15">
+    <moduleExt4 enabled="true"/>
+    <moduleNetfilter enabled="true"/>
+  </kernelCore>
+  <serviceSSH port="22"/>
+  <serviceCron enabled="true"/>
+  <securityPolicy selinuxMode="enforcing"/>
+  <resourceLimits>
+    <maxOpenFiles value="1024"/>
+  </resourceLimits>
+</operatingSystemRoot>
