@@ -1,0 +1,18 @@
+{
+  "os": "Linux",
+  "kernel": {
+    "type": "monolithic",
+    "version": "6.6",
+    "modules": [
+      {"name": "ext4", "enabled": true},
+      {"name": "btrfs", "enabled": true}
+    ]
+  },
+  "services": [
+    {"name": "ssh", "port": 2222}
+  ],
+  "security": {"selinux": "permissive"},
+  "observability": {
+    "agents": ["node_exporter"]
+  }
+}

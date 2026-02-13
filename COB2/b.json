@@ -1,0 +1,16 @@
+{
+  "os": "Linux",
+  "kernel": {
+    "type": "monolithic",
+    "version": "5.15",
+    "modules": [
+      {"name": "ext4", "enabled": true},
+      {"name": "nf_conntrack", "enabled": true}
+    ]
+  },
+  "services": [
+    {"name": "ssh", "port": 22},
+    {"name": "cron"}
+  ],
+  "security": {"selinux": "enforcing"}
+}

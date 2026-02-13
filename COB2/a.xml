@@ -1,0 +1,13 @@
+<operatingSystem id="linux01" family="unix">
+  <kernel type="monolithic" version="5.15">
+    <modules>
+      <module name="ext4" enabled="true"/>
+      <module name="nf_conntrack" enabled="true"/>
+    </modules>
+  </kernel>
+  <services>
+    <service name="ssh" port="22"/>
+    <service name="cron"/>
+  </services>
+  <security selinux="enforcing"/>
+</operatingSystem>
