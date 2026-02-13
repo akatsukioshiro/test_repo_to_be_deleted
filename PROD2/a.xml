@@ -1,12 +1,25 @@
 <operatingSystemRoot id="linux01" family="unix" vendor="community">
   <kernelCore type="monolithic" version="6.6">
-    <moduleExt4 enabled="true"/>
-    <moduleBtrfs enabled="true"/>
+    <moduleExt4>
+      <ext4Status>enabled</ext4Status>
+    </moduleExt4>
+    <moduleBtrfs>
+      <btrfsState>enabled</btrfsState>
+    </moduleBtrfs>
   </kernelCore>
-  <serviceSSH port="2222"/>
-  <securityPolicy selinuxMode="permissive"/>
-  <observabilityAgent name="node_exporter"/>
+  <serviceSSH>
+    <sshPort>2222</sshPort>
+    <sshPolicy>allow</sshPolicy>
+  </serviceSSH>
+  <securityPolicy>
+    <selinuxMode>permissive</selinuxMode>
+  </securityPolicy>
+  <observabilityAgent>
+    <agentName>node_exporter</agentName>
+  </observabilityAgent>
   <resourceLimits>
-    <maxOpenFiles value="4096"/>
+    <maxOpenFiles>
+      <softLimit>4096</softLimit>
+    </maxOpenFiles>
   </resourceLimits>
 </operatingSystemRoot>
